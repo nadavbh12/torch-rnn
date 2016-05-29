@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# $1 - composer
+# $2 - meter 3 or 4
+SIZE=512
+
+#python music/gatherData.py --meter $2
+
+#python scripts/preprocess.py --input_txt $1.txt --output_h5 music/$1.h5 --output_json music/$1.json
+
+#th train.lua -input_h5 music/$1.h5  -input_json music/$1.json  -rnn_size $SIZE -num_layers 3 -dropout 0.3 -checkpoint_name cv/$1_meter$2_size$SIZE
+
+while true; do
+	th sample.lua -checkpoint cv/$1_meter$2_size$SIZE_11850.t7 -temperature 0.8 -length 5000 > music/$1_sample.krn
+	python music/postprocess.py --input_krn music/$1_sample.krn --header music/header --trailer music/trailer
+
+	python music/displayXml.py --input_krn music/$1_sample.krn
+	if [ $? -eq 0 ]; then
+		break;
+	fi
+done

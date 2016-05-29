@@ -4,8 +4,10 @@ require 'optim'
 
 require 'LanguageModel'
 require 'util.DataLoader'
+require 'util.PlotError'
 
 local utils = require 'util.utils'
+local plotError = require('util.PlotError')
 local unpack = unpack or table.unpack
 
 local cmd = torch.CmdLine()
@@ -35,7 +37,9 @@ cmd:option('-lr_decay_factor', 0.5)
 
 -- Output options
 cmd:option('-print_every', 1)
+cmd:option('-print_every', 1)
 cmd:option('-checkpoint_every', 1000)
+cmd:option('-plot', true)
 cmd:option('-checkpoint_name', 'cv/checkpoint')
 
 -- Benchmark options
@@ -101,10 +105,12 @@ local crit = nn.CrossEntropyCriterion():type(dtype)
 -- Set up some variables we will use below
 local N, T = opt.batch_size, opt.seq_length
 local train_loss_history = {}
+local test_loss_history = {}
 local val_loss_history = {}
 local val_loss_history_it = {}
 local forward_backward_times = {}
 local init_memory_usage, memory_usage = nil, {}
+test = false
 
 if opt.memory_benchmark == 1 then
   -- This should only be enabled in GPU mode
@@ -116,12 +122,19 @@ end
 
 -- Loss function that we pass to an optim method
 local function f(w)
+  print("test is: " .. tostring(test))
   assert(w == params)
   grad_params:zero()
+  local test = test or false
 
   -- Get a minibatch and run the model forward, maybe timing it
   local timer
-  local x, y = loader:nextBatch('train')
+    local x, y
+  if not test then    
+    x, y = loader:nextBatch('train')
+  else
+    x, y = loader:nextBatch('test')
+  end
   x, y = x:type(dtype), y:type(dtype)
   if opt.speed_benchmark == 1 then
     if cutorch then cutorch.synchronize() end
@@ -168,6 +181,9 @@ local optim_config = {learningRate = opt.learning_rate}
 local num_train = loader.split_sizes['train']
 local num_iterations = opt.max_epochs * num_train
 model:training()
+
+local train_loss_history_tensor = torch.Tensor(num_iterations)
+local test_loss_history_tensor = torch.Tensor(num_iterations)
 for i = start_i + 1, num_iterations do
   local epoch = math.floor(i / num_train) + 1
 
@@ -184,13 +200,32 @@ for i = start_i + 1, num_iterations do
 
   -- Take a gradient step and maybe print
   -- Note that adam returns a singleton array of losses
+  test = false
   local _, loss = optim.adam(f, params, optim_config)
+  test = true
+  local _, testLoss = optim.adam(f, params, optim_config)
   table.insert(train_loss_history, loss[1])
+  table.insert(test_loss_history, testLoss[1])
+  
+  logger = optim.Logger('Loss.log')
+  
+  
   if opt.print_every > 0 and i % opt.print_every == 0 then
     local float_epoch = i / num_train + 1
     local msg = 'Epoch %.2f / %d, i = %d / %d, loss = %f'
     local args = {msg, float_epoch, opt.max_epochs, i, num_iterations, loss[1]}
     print(string.format(unpack(args)))
+--    if opt.plot and (table.getn(train_loss_history) > 1) then
+    if opt.plot and i > 1 then
+      train_loss_history_tensor[i] = loss[1]
+      test_loss_history_tensor[i] = testLoss[1]
+      logger:add{['training error'] = loss[1],
+                ['test error'] = testLoss[1]}
+      logger:plot()
+      
+--      local title = 'Classification Error'
+--      plotError.plotError(i, test_loss_history_tensor, train_loss_history_tensor, title)
+    end
   end
 
   -- Maybe save a checkpoint

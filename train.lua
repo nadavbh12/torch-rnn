@@ -1,6 +1,7 @@
 require 'torch'
 require 'nn'
 require 'optim'
+require 'gnuplot'
 
 require 'LanguageModel'
 require 'util.DataLoader'
@@ -40,6 +41,7 @@ cmd:option('-print_every', 1)
 cmd:option('-print_every', 1)
 cmd:option('-checkpoint_every', 1000)
 cmd:option('-plot', true)
+cmd:option('-plot_every', 100)
 cmd:option('-checkpoint_name', 'cv/checkpoint')
 
 -- Benchmark options
@@ -122,7 +124,6 @@ end
 
 -- Loss function that we pass to an optim method
 local function f(w)
-  print("test is: " .. tostring(test))
   assert(w == params)
   grad_params:zero()
   local test = test or false
@@ -200,31 +201,30 @@ for i = start_i + 1, num_iterations do
 
   -- Take a gradient step and maybe print
   -- Note that adam returns a singleton array of losses
-  test = false
-  local _, loss = optim.adam(f, params, optim_config)
   test = true
+  local _, loss = optim.adam(f, params, optim_config)
+  test = false
   local _, testLoss = optim.adam(f, params, optim_config)
   table.insert(train_loss_history, loss[1])
   table.insert(test_loss_history, testLoss[1])
   
   logger = optim.Logger('Loss.log')
   
+  gnuplot.figure(1)
+  gnuplot.title('Classification Error. netSize = ' .. opt.rnn_size .. ', numLayers = ' .. opt.num_layers .. ', dropout = ' .. opt.dropout)
   
   if opt.print_every > 0 and i % opt.print_every == 0 then
     local float_epoch = i / num_train + 1
     local msg = 'Epoch %.2f / %d, i = %d / %d, loss = %f'
     local args = {msg, float_epoch, opt.max_epochs, i, num_iterations, loss[1]}
     print(string.format(unpack(args)))
---    if opt.plot and (table.getn(train_loss_history) > 1) then
-    if opt.plot and i > 1 then
-      train_loss_history_tensor[i] = loss[1]
-      test_loss_history_tensor[i] = testLoss[1]
-      logger:add{['training error'] = loss[1],
-                ['test error'] = testLoss[1]}
-      logger:plot()
-      
---      local title = 'Classification Error'
---      plotError.plotError(i, test_loss_history_tensor, train_loss_history_tensor, title)
+    if opt.plot and i > 1 and i % opt.plot_every == 0 then
+      local range = torch.range(1, i)
+      train_loss_history_tensor = torch.Tensor(train_loss_history)
+      test_loss_history_tensor = torch.Tensor(test_loss_history)
+      gnuplot.plot(
+          {'train', range, train_loss_history_tensor, '-'},
+          {'test', range, test_loss_history_tensor, '-'})
     end
   end
 
@@ -273,8 +273,14 @@ for i = start_i + 1, num_iterations do
     model:float()
     checkpoint.model = model
     local filename = string.format('%s_%d.t7', opt.checkpoint_name, i)
+    local plotFileName = string.format('%s.png', opt.checkpoint_name)
     paths.mkdir(paths.dirname(filename))
     torch.save(filename, checkpoint)
+    if opt.plot then
+      gnuplot.figprint(plotFileName)
+      gnuplot.plotflush()
+    end
+    
     model:type(dtype)
     params, grad_params = model:getParameters()
     collectgarbage()

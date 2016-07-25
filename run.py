@@ -3,20 +3,18 @@ import argparse
 import os
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--composer', default='mozart')
+parser.add_argument('--composer', default='parker')
 parser.add_argument('--meter', type=int, default=4)
 parser.add_argument('--rnn_size', type=int, default=512)
 parser.add_argument('--num_layers', type=int, default=3)
 parser.add_argument('--dropout', type=float, default=0.01)
 parser.add_argument('--max_epoch', type=int, default=50)
-parser.add_argument('--length', type=int, default=5000)
+parser.add_argument('--length', type=int, default=1000)
 args = parser.parse_args()
 
 # networkSize = [128, 256, 512]
 
-# print "nadav"
-
-os.system("python music/gatherData.py --meter 4")
+# os.system("python music/gatherData.py --meter 4")
 preprocessCommand = ("python scripts/preprocess.py"
                      " --input_txt %s.txt"
                      " --output_h5 music/%s.h5"
@@ -58,18 +56,20 @@ trainCommand = ("th train.lua"
 # print trainCommand
 # os.system(trainCommand)
 
-print 'cvName = ' + cvName
+cvName = "parker_meter4_size512_layers3_dropout0.500000_8000.t7"
+# print 'cvName = ' + cvName
 sampleCommand = ("th sample.lua"
                  " -checkpoint cv/%s"
                  " -temperature %.2f" 
                  " -length %d"
-                 " -bar_length %d"
+#                  " -bar_length %d"
                  " > music/%s_sample.krn") % \
                  (
-                  cvName + '_5050.t7', \
-                  0.8, \
+                  cvName, \
+#                   cvName + '_5050.t7', \
+                  2, \
                   args.length, \
-                  32, \
+#                   32, \
                   args.composer                  
                  )
 print sampleCommand

@@ -3,19 +3,19 @@ import argparse
 import os
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--composer', default='mozart')
+parser.add_argument('--composer', default='parker')
 parser.add_argument('--meter', type=int, default=4)
 args = parser.parse_args()
 
 # networkSize = [128, 256, 512]
-networkSize = [512]
-layers  = [2, 3]
-dropouts = [0.01, 0.05, 0.07]
+networkSize = [256,512]
+layers  = [3]
+dropouts = [0.3, 0.5, 0.7]
 meter   = 4
-maxEpochs = 30
+maxEpochs = 10
 # print "nadav"
 
-os.system("python music/gatherData.py --meter 4")
+os.system("python music/gatherDataParker.py --meter 4")
 preprocessCommand = ("python scripts/preprocess.py"
                      " --input_txt %s.txt"
                      " --output_h5 music/%s.h5"
